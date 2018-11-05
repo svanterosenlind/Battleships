@@ -1,161 +1,113 @@
-import random
+import numpy as np
+from numpy.core.multiarray import ndarray
 import math
-
+FPS = 30
 
 class Battleship:
-    def __init__(self, sea):
-        self.health = 100
-        self.xpos = random.randint(0, sea[0])
-        self.ypos = random.randint(0, sea[1])
-        self.angle = random.uniform(0, 2*math.pi)
-        self.vel = 0
-        self.perception = 400
-        self.max_vel = 2
-        self.max_acc = 1
-        self.max_angular_vel = 0.5
-        self.reload_time = 5
-        self.reload_status = 0      # 0 means ready to shoot
-        self.width = 2
-        self.length = 5
+    pos: ndarray
+    vel: ndarray
+    acc: ndarray
 
-    def corners(self):
-        x = self.xpos
-        y = self.ypos
-        a = self.angle
-        """             length
-                        [3] ----------------------- [2]                       <-
-                   width  |                           |      --> Forward       |  angle
-                       xpos, ypos [0] --------------- [1]                      |
-                   """
-        return [(x, y),
-                (x + self.length * math.cos(a), y + self.length * math.sin(a)),
-                (x + self.length * math.cos(a) - self.width * math.sin(a),
-                 y + self.length * math.sin(a) + self.width * math.cos(a)),
-                (x - self.width * math.sin(a), y + self.width * math.cos(a))]
+    def __init__(self):
+        self.pos = np.array([400, 400])
+        self.vel = np.array([0, 0])
+        self.acc = np.array([0, 0])
 
+        self.angle = 0
+        self.angle_vel = 0
+        self.angle_acc = 0
 
-class DNABattleship(Battleship):
-    def __init__(self, sea):
-        super().__init__(sea)
-        self.DNA_grid_size = 10
-        self.DNA = []
-        """The DNA is a 3d array, where the first two dimensions correspond to the relative position of another ship, 
-        and the last one is an array of this ships desired velocity in that case, as well as its desire to fire in both 
-        directions.
-        The blocks into which the other ships are categorized are 10x10 and the ships see ships 400 units away"""
-        for x in range(2*self.perception//self.DNA_grid_size):
-            col = []
-            for y in range(2*self.perception//self.DNA_grid_size): # TODO: fix so that the vector fields are rotated
-                gene = (random.uniform(-1, 1), random.uniform(-1, 1), random.randint(0, 1), random.randint(0, 1))
-                col.append(gene)
-            self.DNA.append(col)
+        self.reload_time = 2    # In seconds
+        self.reload_status = 0
 
-    def update(self, ships):
-        # Calculate desires
-        desired_state = [0, 0, 0, 0]   # xvel, yvel, fire left, fire right
-        for ship in ships:
-            if ship.xpos != self.xpos or ship.ypos != self.ypos:
-                x_diff = ship.xpos - self.xpos
-                y_diff = ship.ypos - self.ypos
-                if abs(x_diff) > self.perception or abs(y_diff) > self.perception:  # The ship is too far away to see
-                    continue
-                gene = self.DNA[int((x_diff - self.perception)//10)][int((y_diff - self.perception)//10)]
+        self.size = (20, 12)  # length, width
+        self.max_F = 30000
+        self.m = 10000  # Weight in kilos
+        self.J = 100000  # Moment of inertia
 
-                for j in [0, 1]:
-                    desired_state[j] += gene[j] / (len(ships) - 1)  # Genes relating to movement
-                
-                for j in [2, 3]:
-                    desired_state[j] += gene[j]     # Genes related to shooting
-        #   Ship movement
-        desired_angle = math.atan2(desired_state[1], desired_state[0])
-        if abs((self.angle - desired_angle) % 2*math.pi) < self.max_angular_vel * self.vel:
-            self.angle = desired_angle
-        if self.angle - desired_angle < 0:
-            right_error = self.angle - desired_angle + 2*math.pi
-            left_error = desired_angle - self.angle
-        else:
-            right_error = self.angle - desired_angle
-            left_error = desired_angle - self.angle + 2*math.pi
+        self.fric = 100
+        self.angle_fric = 1000000
 
-        if right_error < left_error:    # The ship wants to turn right
-            self.angle -= self.max_angular_vel * self.vel
-        else:       # The ship wants to turn left
-            self.angle += self.max_angular_vel * self.vel
+        self.shot_deviation = 0.1
+    def update(self):
+        self.vel = self.vel + self.acc/FPS
+        self.pos = self.pos + self.vel/FPS
+        self.angle_vel += self.angle_acc/FPS
+        self.angle += self.angle_vel/FPS
 
-        self.angle %= 2*math.pi
-        self.xpos += math.sin(self.angle) * self.vel
-        self.ypos += math.cos(self.angle) * self.vel
-        #   Fire cannons
-        corners = self.corners()
-        if desired_state[2] >= 1 and self.reload_status == 0:
-            self.reload_status = self.reload_time
-            p1 = corners[3]
-            p2 = corners[2]
-            return [Cannonball((p1[0] + 3 * p2[0]) / 4, (p1[1] + 3 * p2[1]) / 4, self.angle + math.pi / 2),
-                    Cannonball((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, self.angle + math.pi / 2),
-                    Cannonball((3 * p1[0] + p2[0]) / 4, (3 * p1[1] + p2[1]) / 4, self.angle + math.pi / 2)]
-        if desired_state[3] >= 1 and self.reload_status == 0:
-            self.reload_status = self.reload_time
-            p1 = corners[0]
-            p2 = corners[1]
-            return [Cannonball((p1[0] + 3 * p2[0]) / 4, (p1[1] + 3 * p2[1]) / 4, self.angle - math.pi / 2),
-                    Cannonball((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, self.angle - math.pi / 2),
-                    Cannonball((3 * p1[0] + p2[0]) / 4, (3 * p1[1] + p2[1]) / 4, self.angle - math.pi / 2)]
-        self.reload_status -= 1
-        if self.reload_status < 0:
-            self.reload_status = 0
+    def corners(self) -> ndarray:
+        rotator = np.array([[math.cos(self.angle), math.sin(self.angle)], [-math.sin(self.angle), math.cos(self.angle)]])
+        p1 = self.pos + np.dot(rotator, np.array([-self.size[0]/3, self.size[1]/2]))
+        p2 = self.pos + np.dot(rotator, np.array([2 * self.size[0] / 3, self.size[1] / 2]))
+        p3 = self.pos + np.dot(rotator, np.array([2 * self.size[0] / 3, - self.size[1] / 2]))
+        p4 = self.pos + np.dot(rotator, np.array([-self.size[0]/3, - self.size[1]/2]))
+        return np.array([p1, p2, p3, p4])
+
+    def shoot_left(self):
+        corn = self.corners()
+        p1 = (3 * corn[3] + corn[2])/4
+        p2 = (corn[3] + corn[2]) / 2
+        p3 = (3 * corn[2] + corn[3]) / 4
+        return [Cannonball(p1, self.angle + math.pi/2 + self.shot_deviation),
+                Cannonball(p2, self.angle + math.pi/2),
+                Cannonball(p3, self.angle + math.pi/2 - self.shot_deviation)]
+
+    def shoot_right(self):
+        corn = self.corners()
+        p1 = (3 * corn[0] + corn[1]) / 4
+        p2 = (corn[0] + corn[1]) / 2
+        p3 = (3 * corn[1] + corn[0]) / 4
+        return [Cannonball(p1, self.angle - math.pi/2 - self.shot_deviation),
+                Cannonball(p2, self.angle - math.pi/2),
+                Cannonball(p3, self.angle - math.pi/2 + self.shot_deviation)]
 
 
 class PlayerBattleship(Battleship):
-    def __init__(self, sea):
-        super().__init__(sea)
+    def __init__(self):
+        super().__init__()
 
-    def update(self, left, right, up, a, d):
-        #   Ship movement
-        if right:
-            self.angle -= self.max_angular_vel * self.vel
-        if left:
-            self.angle += self.max_angular_vel * self.vel
-
+    def calculate_FM(self, keys):
+        [up, right, left] = keys
+        F = np.array([0, 0])
+        M = 0
+        direction = np.array([math.cos(self.angle), -math.sin(self.angle)])
+        ortho_direction = np.array([math.cos(self.angle + math.pi/2), -math.sin(self.angle + math.pi/2)])
+        #   Calculate added force and moment from steering inputs
         if up:
-            self.vel += self.max_acc
-            if self.vel > self.max_vel:
-                self.vel = self.max_vel
+            F = F + np.array([self.max_F]*2) * direction
+        if left and right:
+            pass
+        elif left:
+            M = (np.dot(self.vel, direction)+2) * 1000
+            F = F + (np.array([M]*2) * ortho_direction) / 100
+        elif right:
+            M = -(np.dot(self.vel, direction)+2) * 1000
+            F = F - (np.array([M] * 2) * ortho_direction) / 100
+        #   Calculate friction and rotational friction
+        F = F - np.linalg.norm(self.vel) * self.vel * self.fric
+        M = M - (abs(self.angle_vel) ** 2) * self.angle_vel * self.angle_fric
 
-        self.xpos += math.cos(self.angle) * self.vel
-        self.ypos += math.sin(self.angle) * self.vel
+        self.acc = F/self.m
+        self.angle_acc = M/self.J
 
-        #   Fire cannonballs
-        corners = self.corners()
-        if a and self.reload_status == 0:
-            self.reload_status = self.reload_time
-            p1 = corners[3]
-            p2 = corners[2]
-            return [Cannonball((p1[0] + 3 * p2[0])/4,   (p1[1] + 3 * p2[1])/4,    self.angle + math.pi/2),
-                    Cannonball((p1[0] + p2[0])/2,       (p1[1] + p2[1])/2,        self.angle + math.pi/2),
-                    Cannonball((3*p1[0] + p2[0])/4,     (3*p1[1] + p2[1])/4,      self.angle + math.pi/2)]
-        if d and self.reload_status == 0:
-            self.reload_status = self.reload_time
-            p1 = corners[0]
-            p2 = corners[1]
-            return [Cannonball((p1[0] + 3 * p2[0]) / 4, (p1[1] + 3 * p2[1]) / 4, self.angle - math.pi / 2),
-                    Cannonball((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, self.angle - math.pi / 2),
-                    Cannonball((3 * p1[0] + p2[0]) / 4, (3 * p1[1] + p2[1]) / 4, self.angle - math.pi / 2)]
+    def shoot(self, keys):
+        a, d = keys
         self.reload_status -= 1
-        if self.reload_status < 0:
-            self.reload_status = 0
-
-
+        if a and self.reload_status <= 0:
+            self.reload_status = self.reload_time * FPS
+            return self.shoot_left()
+        elif d and self.reload_status <= 0:
+            self.reload_status = self.reload_time * FPS
+            return self.shoot_right()
+        return []
 
 class Cannonball:
-    def __init__(self, xpos, ypos, angle):
-        self.xpos = xpos
-        self.ypos = ypos
-        self.vel = 4
+    def __init__(self, pos, angle):
+        self.pos = pos
         self.angle = angle
-        self.distance_left = 40
+        self.vel = 5
+        self.distance_left = 60
 
     def update(self):
-        self.xpos += math.sin(self.angle) * self.vel
-        self.ypos += math.cos(self.angle) * self.vel
+        self.pos = self.pos + np.array([self.vel]*2) * np.array([math.cos(self.angle), -math.sin(self.angle)])
         self.distance_left -= self.vel
