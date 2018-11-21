@@ -81,7 +81,6 @@ class Battleship:
             return self.shoot_right()
         return []
 
-
     def corners(self) -> ndarray:
         rotator = np.array([[math.cos(self.angle), math.sin(self.angle)], [-math.sin(self.angle), math.cos(self.angle)]])
         p1 = self.pos + np.dot(rotator, np.array([-self.size[0]/3, self.size[1]/2]))
@@ -115,35 +114,48 @@ class DNABattleship(Battleship):
         self.DNA = [[0]*4]*4
         for x in range(4):
             for y in range(4):
-                gene = np.array([random.uniform(-1, 1)] * 2 + [random.random()] * 2)    # acc, angle, shootleft, right
+                gene = np.array([random.uniform(-1, 1), random.uniform(-1, 1), random.random(), random.random()])    # acc, angle, shootleft, right
                 self.DNA[x][y] = gene
+                print(gene)
         self.pos = np.array([random.randint(0, sea[0]), random.randint(0, sea[1])])
+
 
     def calculate(self, boats):
         total_gene = np.array([0]*4)
+        seen_boat = False
         for boat in boats:
             if boat is self:
                 continue
             if np.dot(boat.pos - self.pos, boat.pos - self.pos) > 10000:
                 continue
+            seen_boat = True
             rel_pos = boat.pos - self.pos
             rotator = np.array(
                 [[math.cos(self.angle), math.sin(self.angle)], [-math.sin(self.angle), math.cos(self.angle)]])
-            rel_pos_rotated = np.dot(rel_pos, rotator)
-            gene_index = ((rel_pos_rotated - np.array([100]*2)) // 50).tolist()
-            gene = self.DNA[int(gene_index[0])][int(gene_index[1])]   # BUG in pycharm
+            rel_pos_rotated = np.dot(rotator, rel_pos)
+            gene_index = ((rel_pos_rotated + np.array([100]*2)) // 50).tolist()
+            print(gene_index)
+            gene = self.DNA[int(gene_index[0])][int(gene_index[1])]
             total_gene = total_gene + gene
         [up, left, right, a, d] = [False] * 5
-        if 0.5 < total_gene[2] > total_gene[3]:
-            a = True
-        elif 0.5 < total_gene[3] > total_gene[2]:
-            d = True
-        if total_gene[0] > 0.7:
+        if not seen_boat:
             up = True
-        if total_gene[1] > 0.3:
-            left = True
-        elif total_gene[1] < -0.3:
-            right = True
+            if random.random() < 0.5:
+                left = True
+            else:
+                right = True
+        else:
+            if 0.5 < total_gene[2] and total_gene[2] > total_gene[3]:
+                a = True
+            elif 0.5 < total_gene[3] and total_gene[3] > total_gene[2]:
+                d = True
+            if total_gene[0] > 0.7:
+                up = True
+            if total_gene[1] > 0.3:
+                left = True
+            elif total_gene[1] < -0.3:
+                right = True
+
         super().calculate_FM([up, right, left])
         return super().shoot([a, d])
 

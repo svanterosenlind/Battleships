@@ -13,7 +13,7 @@ def main():
     #   Initialize things
     b = PlayerBattleship(sea)
     boats = []
-    for n in range(20):
+    for n in range(10):
         boot = DNABattleship(sea)
         boats.append(DNABattleship(sea))
     balls = []
