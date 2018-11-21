@@ -107,6 +107,12 @@ class Battleship:
                 Cannonball(p2, self.angle - math.pi/2, self),
                 Cannonball(p3, self.angle - math.pi/2 + self.shot_deviation, self)]
 
+    def check_collision(self, boat):
+        if np.dot(self.pos-boat.pos, self.pos-boat.pos) < self.size[1] ** 2:
+            return True
+        else:
+            return False
+
 
 class DNABattleship(Battleship):
     def __init__(self, sea):
@@ -116,8 +122,8 @@ class DNABattleship(Battleship):
             for y in range(4):
                 gene = np.array([random.uniform(-1, 1), random.uniform(-1, 1), random.random(), random.random()])    # acc, angle, shootleft, right
                 self.DNA[x][y] = gene
-                print(gene)
         self.pos = np.array([random.randint(0, sea[0]), random.randint(0, sea[1])])
+        self.angle = random.uniform(0, 2 * math.pi)
 
 
     def calculate(self, boats):
@@ -134,7 +140,6 @@ class DNABattleship(Battleship):
                 [[math.cos(self.angle), math.sin(self.angle)], [-math.sin(self.angle), math.cos(self.angle)]])
             rel_pos_rotated = np.dot(rotator, rel_pos)
             gene_index = ((rel_pos_rotated + np.array([100]*2)) // 50).tolist()
-            print(gene_index)
             gene = self.DNA[int(gene_index[0])][int(gene_index[1])]
             total_gene = total_gene + gene
         [up, left, right, a, d] = [False] * 5

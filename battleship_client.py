@@ -5,7 +5,7 @@ from battleship import *
 def main():
     #   Initialize graphics and things
     pygame.init()
-    sea = (800, 800)
+    sea = (1400, 800)
     scr = pygame.display.set_mode(sea)
     running = True
     [up, right, left, a, d] = [False]*5
@@ -13,7 +13,7 @@ def main():
     #   Initialize things
     b = PlayerBattleship(sea)
     boats = []
-    for n in range(10):
+    for n in range(50):
         boot = DNABattleship(sea)
         boats.append(DNABattleship(sea))
     balls = []
@@ -67,6 +67,22 @@ def main():
             balls += boat.calculate(boats + [b])
             boat.update()
 
+        #   Check boat collisions
+        remove_list = []
+        for b1 in boats + [b]:
+            for b2 in boats + [b]:
+                if b1 is b2:
+                    continue
+                if b1.check_collision(b2):
+                    if b1 not in remove_list:
+                        remove_list.append(b1)
+                    if b2 not in remove_list:
+                        remove_list.append(b2)
+        for rb in remove_list:
+            print("Annihilation!")
+            if rb is b:     # Don't destroy the player
+                continue
+            boats.remove(rb)
         # Draw the sea
         pygame.draw.rect(scr, (0, 0, 0), scr.get_rect())
         draw_boat(b, scr)
